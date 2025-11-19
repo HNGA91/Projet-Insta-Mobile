@@ -1,8 +1,14 @@
 import { View, Text, Pressable, KeyboardAvoidingView, ScrollView, TouchableOpacity, Platform } from "react-native";
 import styles from "../styles/Styles";
+import { UserContext } from "../Context/Context";
+import { useContext } from "react";
 
 const ProfilScreen = ({ navigation, panier, favoris, setIsLogin }) => {
+
+    const { user, setUser } = useContext(UserContext);
+
 	const handleDeconnexion = () => {
+        setUser(null);
 		setIsLogin(false); // Remet l'état global à "déconnecté"
 		navigation.navigate("Catalogue"); // Retour automatique à l'accueil
 	};
@@ -10,7 +16,7 @@ const ProfilScreen = ({ navigation, panier, favoris, setIsLogin }) => {
 	return (
 		<View style={{ flex: 1 }}>
 			<View style={styles.header}>
-				<Text style={styles.title}>Bienvenue</Text>
+				<Text style={styles.title}>Bienvenue {user?.prenom ?? ""}</Text>
 				<View>
 					<TouchableOpacity style={styles.cartBadge} onPress={() => navigation.navigate("Panier")}>
 						<Text style={styles.cartText}>
@@ -33,9 +39,7 @@ const ProfilScreen = ({ navigation, panier, favoris, setIsLogin }) => {
 					contentContainerStyle={{ minHeight: "100%", justifyContent: "center" }}
 					showsHorizontalScrollIndicator={false}
 					keyboardShouldPersistTaps="handled"
-				>
-				
-				</ScrollView>
+				></ScrollView>
 			</KeyboardAvoidingView>
 		</View>
 	);

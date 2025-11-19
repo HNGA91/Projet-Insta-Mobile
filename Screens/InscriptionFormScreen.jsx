@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { View, StyleSheet, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
 import styles from "../styles/Styles";
+import { Alert } from "react-native";
+import { InitDB } from "../Database/InitDB";
+import { InsertUser } from "../Database/Task";
 
 const InscriptionFormScreen = ({ setIsLogin }) => {
-    
 	const [formData, setFormData] = useState({ nom: "", prenom: "", email: "", tel: "", password: "", confirmPassword: "" });
 	const [error, setError] = useState("");
 	const [errorNom, setErrorNom] = useState("");
@@ -15,7 +17,7 @@ const InscriptionFormScreen = ({ setIsLogin }) => {
 	const [errorConfirmPassword, setErrorConfirmPassword] = useState("");
 	const [isValid, setIsValid] = useState(false);
 
-	//Ref pour déplacer le focus entre les inputs
+	// Ref pour déplacer le focus entre les inputs
 	const nomInputRef = useRef(null);
 	const prenomInputRef = useRef(null);
 	const emailInputRef = useRef(null);
@@ -29,6 +31,18 @@ const InscriptionFormScreen = ({ setIsLogin }) => {
 		if (nomInputRef.current) {
 			nomInputRef.current.focus();
 		}
+	}, []);
+
+	// Initialise la base de donnée
+	useEffect(() => {
+		const setupDB = async () => {
+			try {
+				await InitDB();
+			} catch (error) {
+				console.error("Erreur lors de m'initialisation de la base :", error);
+			}
+		};
+		setupDB();
 	}, []);
 
 	// UseEffect qui surveille la validité du formulaire pour l'activation du bouton submit
@@ -166,8 +180,10 @@ const InscriptionFormScreen = ({ setIsLogin }) => {
 		}
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		let isValid = true;
+
+		// VALIDATION COTE CLIENT
 
 		// Nom
 		if (formData.nom.trim() === "") {
@@ -224,7 +240,7 @@ const InscriptionFormScreen = ({ setIsLogin }) => {
 		} else {
 			setErrorPassword("");
 		}
-		// Confirmation
+		// Confirmation du mot de passe
 		if (formData.confirmPassword.trim() === "") {
 			setErrorConfirmPassword('⚠️ Le champ "Confirmation de mot de passe" ne peut pas être vide');
 			isValid = false;
@@ -244,10 +260,32 @@ const InscriptionFormScreen = ({ setIsLogin }) => {
 			return;
 		}
 
-		// Si tout est bon :
-		console.log("✅ Données envoyées :", formData);
-		setIsLogin(true); // Inscription réussie = connexion automatique
-		navigation.replace("Profil");
+		// VALIDATION COTE BASE DE DONNEE
+
+		// Si la validation côté client est passée, on vérifie en base de données
+		try {
+			console.log("✅ Validation côté client réussie, vérification en base de données...");
+
+			await InsertUser(formData.nom, formData.prenom, formData.email, formData.tel, formData.password);
+			Alert.alert("✅ Inscription réussie", `Bienvenue, ${formData.prenom} !`);
+
+			// Réinitialisation correcte du formulaire
+			setFormData({
+				nom: "",
+				prenom: "",
+				email: "",
+				tel: "",
+				password: "",
+				confirmPassword: "",
+			});
+            
+			// Marquer comme connecté et navigation vers "Profil"
+			setIsLogin(true);
+			navigation.navigate("Profil");
+		} catch (error) {
+			console.error("Erreur lors de l'insertion :", error);
+			Alert.alert("❌ Erreur", "Impossible d'insérer l'utilisateur.");
+		}
 	};
 
 	return (

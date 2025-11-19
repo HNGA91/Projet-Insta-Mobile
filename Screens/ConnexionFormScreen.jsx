@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { View, StyleSheet, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
 import styles from "../styles/Styles";
+import { Alert } from "react-native";
+import { InitDB } from "../Database/InitDB";
+import { VerifUser } from "../Database/Task"
 
 const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
     
@@ -9,6 +12,11 @@ const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
 	const [error, setError] = useState("");
 	const [errorEmail, setErrorEmail] = useState("");
 	const [errorPassword, setErrorPassword] = useState("");
+
+    // Accès au context
+    const { setUser } = useContext(UserContext);
+
+    // Pour vérifier l'état de validation du formulaire
 	const [isValid, setIsValid] = useState(false);
 
 	//Ref pour déplacer le focus entre les inputs
@@ -17,19 +25,24 @@ const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
 
 	const navigation = useNavigation();
 
+    // Initialise la base de donnée
+    useEffect(() => {
+            const setupDB = async () => {
+                try {
+                    await InitDB();
+                } catch (error) {
+                    console.error("Erreur lors de m'initialisation de la base :", error);
+                }
+            };
+            setupDB();
+        }, []);
+
 	// Focus auto sur l'email
 	useEffect(() => {
 		if (emailInputRef.current) {
 			emailInputRef.current.focus();
 		}
 	}, []);
-
-	// Redirection automatique une fois connecté
-	useEffect(() => {
-		if (isLogin) {
-			navigation.replace("Profil");
-		}
-	}, [isLogin]);
 
 	// UseEffect qui surveille la validité du formulaire pour l'activation du bouton submit
 	useEffect(() => {
@@ -42,7 +55,7 @@ const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
 	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 	const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{12,}$/;
 
-	//Vérification du champ "email"
+	// Vérification du champ "email"
 	const handleEmailChange = (champ, value) => {
 		setFormData((prev) => ({
 			...prev,
@@ -58,7 +71,7 @@ const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
 		}
 	};
 
-	//Vérification du champ "mot de passe"
+	// Vérification du champ "mot de passe"
 	const handlePasswordChange = (champ, value) => {
 		setFormData((prev) => ({
 			...prev,
@@ -76,8 +89,10 @@ const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
 		}
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		let isValid = true;
+
+		// VALIDATION COTE CLIENT
 
 		// Email
 		if (formData.email.trim() === "") {
@@ -110,9 +125,36 @@ const ConnexionFormScreen = ({ setIsLogin, isLogin }) => {
 			return;
 		}
 
-		// Si tout est bon :
-		console.log("✅ Données envoyées :", formData);
-		setIsLogin(true); // Connexion réussie
+		// VALIDATION COTE BASE DE DONNEE
+
+        // Si la validation côté client est passée, on vérifie en base de données
+		try {
+			console.log("✅ Validation côté client réussie, vérification en base de données...");
+
+			const user = await VerifUser(formData.email, formData.password);
+
+			if (user) {
+				console.log("✅ Utilisateur authentifié:", user);
+				Alert.alert("✅ Connexion réussie", "Bienvenue!");
+
+				// Mettre à jour le contexte utilisateur
+				setUser({
+					nom: user.Nom,
+                    prenom: user.Prenom,
+					email: user.Email,
+				});
+
+				// Marquer comme connecté et navigation vers "Profil"
+				setIsLogin(true);
+				navigation.navigate("Profil");
+			} else {
+				Alert.alert("❌ Erreur", "Email ou mot de passe incorrect.");
+				console.log("❌ Échec de l'authentification, Email ou mot de passe incorrect.");
+			}
+		} catch (error) {
+			console.error("Erreur lors de la vérification :", error);
+			Alert.alert("❌ Erreur", "Une erreur est survenue lors de la connexion.");
+		}
 	};
 
 	return (
