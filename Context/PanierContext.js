@@ -1,51 +1,35 @@
-import React, { createContext, useState, useCallback, useEffect, useContext } from "react";
+import React, { createContext, useState, useCallback, useEffect } from "react";
 import { Alert } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { UserContext } from "./UserContext";
 import { updatePanier, fetchUserData } from "../Database/UserDataAPI";
 
 //Créer un context - une sorte de "zone mémoire partagée"
 export const PanierContext = createContext();
 
 //Definir le fournisseur du context
-export const PanierProvider = ({ children }) => {
+export const PanierProvider = ({ children, user }) => {
 	const [panier, setPanier] = useState([]);
-	const [isLoading, setIsLoading] = useState(false);
-	const { user } = useContext(UserContext);
+	const [lastSync, setLastSync] = useState(null);
+    const [loading, setLoading] = useState(true);
 
 	// Charger le panier au démarrage ou quand l'utilisateur change
 	useEffect(() => {
 		const loadPanier = async () => {
-			setIsLoading(true);
 			try {
+				setLoading(true);
 				if (user) {
-					// Utilisateur connecté : charger depuis le backend
+					// Connecté : charger depuis serveur
 					const userData = await fetchUserData(user.email);
 					setPanier(userData.panier || []);
-					console.log("✅ Panier chargé depuis le serveur");
+					setLastSync(Date.now());
 				} else {
-					// Utilisateur non connecté : charger depuis le stockage local
-					const savedPanier = await AsyncStorage.getItem("panier_guest");
-					if (savedPanier) {
-						setPanier(JSON.parse(savedPanier));
-					}
+					// Non connecté : panier vide (pas de sauvegarde locale)
+					setPanier([]);
 				}
 			} catch (error) {
-				console.error("❌ Erreur lors du chargement du panier:", error);
-
-				// Fallback: Solution de secours
-				// En ligne : Sauvegarde sur le serveur
-				// Hors ligne : Sauvegarde locale (AsyncStorage/localStorage) en attendant la reconnexion
-				try {
-					const savedPanier = await AsyncStorage.getItem("panier_guest");
-					if (savedPanier) {
-						setPanier(JSON.parse(savedPanier));
-					}
-				} catch (fallbackError) {
-					console.error("❌ Erreur fallback:", fallbackError);
-				}
+				console.log("❌ Chargement panier échoué, panier vide");
+				setPanier([]);
 			} finally {
-				setIsLoading(false);
+				setLoading(false);
 			}
 		};
 		loadPanier();
@@ -53,65 +37,54 @@ export const PanierProvider = ({ children }) => {
 
 	// Synchroniser avec le backend à chaque modification
 	useEffect(() => {
-		const syncPanier = async () => {
-			if (!user || isLoading) return;
+		if (!user) return; // Pas de sync si non connecté
+		if (!lastSync || Date.now() - lastSync < 1000) return; // Anti-spam
 
+		const sync = async () => {
 			try {
 				await updatePanier(user.email, panier);
-				console.log("✅ Panier synchronisé avec le serveur");
+				setLastSync(Date.now());
+                console.log("✅ Panier synchronisé avec MongoDB");
 			} catch (error) {
-				console.error("❌ Erreur de synchronisation du panier:", error);
-				// Sauvegarder localement en attendant
-				await AsyncStorage.setItem(`panier_${user.email}`, JSON.stringify(panier));
+				console.error("❌ Sync panier échoué", error);
 			}
 		};
-
-		// Délai pour éviter trop de requêtes
-		const timeoutId = setTimeout(syncPanier, 1000);
-		return () => clearTimeout(timeoutId);
-	}, [panier, user, isLoading]);
-
-	// Sauvegarder localement pour les utilisateurs non connectés
-	useEffect(() => {
-		const saveLocalPanier = async () => {
-			if (user) return; // Ne pas sauvegarder localement si connecté
-
-			try {
-				await AsyncStorage.setItem("panier_guest", JSON.stringify(panier));
-			} catch (error) {
-				console.error("❌ Erreur sauvegarde locale panier:", error);
-			}
-		};
-		saveLocalPanier();
+		sync();
 	}, [panier, user]);
 
 	// Ajouter un article (ou augmenter sa quantité)
-	const ajouterAuPanier = useCallback((article) => {
-		setPanier((prev) => {
-			// 1. Vérifier si l'article existe déjà
-			const existe = prev.find((item) => item._id === article._id);
-			if (existe) {
-				// 2. Si OUI : augmenter la quantité de 1
-				return prev.map((item) => (item._id === article._id ? { ...item, quantite: (item.quantite || 1) + 1 } : item));
-			} else {
-				// 3. Si NON : ajouter nouvel article avec quantité 1
-				return [...prev, { ...article, quantite: 1 }];
-			}
-		});
-	}, []);
+	const ajouterAuPanier = useCallback(
+		(article) => {
+			setPanier((prev) => {
+				// 1. Vérifier si l'article existe déjà
+				const existe = prev.find((item) => item._id === article._id);
+				if (existe) {
+					// 2. Si OUI : augmenter la quantité de 1
+					return prev.map((item) => (item._id === article._id ? { ...item, quantite: (item.quantite || 1) + 1 } : item));
+				} else {
+					// 3. Si NON : ajouter nouvel article avec quantité 1
+					return [...prev, { ...article, quantite: 1 }];
+				}
+			});
+		},
+		[user]
+	);
 
 	// Supprimer un article (ou diminuer sa quantité)
-	const supprimerDuPanier = useCallback((id) => {
-		setPanier((prev) => {
-			// 1. Diminuer la quantité de 1 pour l'article ciblé via l'id
-			return (
-				prev
-					.map((item) => (item._id === id ? { ...item, quantite: (item.quantite || 1) - 1 } : item))
-					// 2. Filtrer pour garder seulement les articles avec quantite > 0
-					.filter((item) => (item.quantite || 0) > 0)
-			);
-		});
-	}, []);
+	const supprimerDuPanier = useCallback(
+		(id) => {
+			setPanier((prev) => {
+				// 1. Diminuer la quantité de 1 pour l'article ciblé via l'id
+				return (
+					prev
+						.map((item) => (item._id === id ? { ...item, quantite: (item.quantite || 1) - 1 } : item))
+						// 2. Filtrer pour garder seulement les articles avec quantite > 0
+						.filter((item) => (item.quantite || 0) > 0)
+				);
+			});
+		},
+		[user]
+	);
 
 	// Vider entièrement le panier avec confirmation avant
 	const viderLePanier = useCallback(() => {
@@ -123,7 +96,7 @@ export const PanierProvider = ({ children }) => {
 				onPress: () => setPanier([]),
 			},
 		]);
-	}, []);
+	}, [user]);
 
 	return (
 		<PanierContext.Provider
@@ -133,7 +106,7 @@ export const PanierProvider = ({ children }) => {
 				ajouterAuPanier,
 				supprimerDuPanier,
 				viderLePanier,
-				isLoading,
+				loading,
 			}}
 		>
 			{children}

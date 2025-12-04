@@ -16,28 +16,11 @@ const FavorisScreen = memo(({ navigation }) => {
 	// Accès au hook personnalisé
 	const { totalPanier, nombreArticlesPanier } = useCalculsPanier();
 
-	// Affiche un message si il n'y a pas de favoris
-	if (favoris.length === 0) {
-		return (
-			<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-				<Text style={{ fontSize: 18 }}>Aucun favoris pour le moment</Text>
-			</View>
-		);
-	}
-
 	// OPTIMISATION : Fonction renderItem de la flatlist mémorisée
 	const renderFavorisItem = useCallback(
 		({ item }) => <FavorisItem item={item} onSupprimer={supprimerDesFavoris} onAjouterPanier={ajouterAuPanier} />,
 		[supprimerDesFavoris, ajouterAuPanier]
 	);
-
-	if (!user) {
-        return (
-			<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-				<Text style={{ fontSize: 18 }}>⛔ Veuillez vous connecter pour accéder à vos favoris.</Text>
-			</View>
-		); 
-    }
 
 	return (
 		<View style={styles.container}>

@@ -9,6 +9,7 @@ import { UserContext } from "../Context/UserContext";
 import { useCalculsPanier } from "../Hooks/useCalculsPanier";
 import { FavorisContext } from "../Context/FavorisContext";
 import ArticlesItem from "../Components/FlatList/ArticlesItem.jsx";
+import { SERVER_URL } from "@env";
 
 const CatalogueScreen = memo(({ navigation }) => {
 	const [erreur, setErreur] = useState(null);
@@ -36,18 +37,38 @@ const CatalogueScreen = memo(({ navigation }) => {
 				// Début du loading
 				setLoading(true);
 
-				const res = await fetch("http://192.168.56.1:3000/api/articles");
+				// Réinitialiser les erreurs précédentes
+				setErreur(null);
+
+				// Ajouter un timeout pour éviter les attentes infinies
+				const controller = new AbortController();
+				const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 secondes timeout
+
+				const res = await fetch(`${SERVER_URL}/articles`, {
+					signal: controller.signal,
+				});
+
+                clearTimeout(timeoutId);
 
 				if (!res.ok) {
 					//throw = lancer une erreur (interruption immédiate).
 					// new Error() = créer un objet erreur avec message, nom et stack.
-					throw new Error("Article introuvable");
+					throw new Error(`Erreur HTTP ${res.status}: ${res.statusText}`);
 				}
 
 				const data = await res.json();
 				setArticles(data); // mise à jour de l’état avec les données reçues
 			} catch (err) {
-				setErreur(err.message); // capture et affichage de l’erreur
+				console.error("❌ Erreur chargement articles:", err);
+
+				// Messages d'erreur plus précis
+				if (err.name === "AbortError") {
+					setErreur("❌ La requête a pris trop de temps. Vérifiez votre connexion.");
+				} else if (err.message.includes("Network request failed")) {
+					setErreur("❌ Erreur réseau. Vérifiez :\n1. Votre connexion internet\n2. Que le serveur est démarré\n3. L'adresse IP du serveur");
+				} else {
+					setErreur(err.message);
+				}
 			} finally {
 				// Fin du loading (même en cas d'erreur)
 				setLoading(false);

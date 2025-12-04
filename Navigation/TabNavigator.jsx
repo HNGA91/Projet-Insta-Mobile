@@ -57,8 +57,8 @@ const TabNavigator = () => {
 				</>
 			)}
 
-			{/* Panier - Écrans publics - SANS Drawer (écran direct) */}
-			<Tab.Screen name="Panier" options={{ headerShown: false }} children={(props) => <PanierScreen {...props} />} />
+			{/* Favoris - Écrans protégés (seulement si connecté) - SANS Drawer (écran direct) */}
+			{isLogin && <Tab.Screen name="Panier" options={{ headerShown: false }} children={(props) => <PanierScreen {...props} />} />}
 
 			{/* Profil - Écrans protégés (seulement si connecté) - AVEC Drawer */}
 			{isLogin && <Tab.Screen name="Profil" options={{ headerShown: false }} children={(props) => <ProfilWithDrawer {...props} />} />}

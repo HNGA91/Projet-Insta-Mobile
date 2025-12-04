@@ -1,12 +1,12 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { View, StyleSheet, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
-import { ActivityIndicator } from "react-native"; 
+import { ActivityIndicator } from "react-native";
 import styles from "../Styles/Styles";
 import { Alert } from "react-native";
-import { InitDB } from "../Database/InitDB";
-import { VerifUser } from "../Database/Task";
 import { UserContext } from "../Context/UserContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SERVER_URL } from "@env";
 
 const ConnexionFormScreen = () => {
 	const [formData, setFormData] = useState({ email: "", password: "" });
@@ -28,18 +28,6 @@ const ConnexionFormScreen = () => {
 	const passwordInputRef = useRef(null);
 
 	const navigation = useNavigation();
-
-	// Initialise la base de donnée
-	useEffect(() => {
-		const setupDB = async () => {
-			try {
-				await InitDB();
-			} catch (error) {
-				console.error("❌ Erreur lors de m'initialisation de la base :", error);
-			}
-		};
-		setupDB();
-	}, []);
 
 	// Focus auto sur l'email
 	useEffect(() => {
@@ -137,27 +125,40 @@ const ConnexionFormScreen = () => {
 
 		// VALIDATION COTE BASE DE DONNEE
 
-		// Si la validation côté client est passée, on vérifie en base de données
 		try {
-			console.log("✅ Validation côté client réussie, vérification en base de données...");
+			console.log("✅ Validation côté client réussie, connexion avec JWT...");
 
-			const user = await VerifUser(formData.email, formData.password);
+			// Appel à la NOUVELLE route d'authentification
+			const response = await fetch(`${SERVER_URL}/auth/login`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: formData.email,
+					password: formData.password,
+					source: "mobile",
+				}),
+			});
 
-			if (user) {
-				console.log("✅ Utilisateur authentifié:", user);
-				Alert.alert("✅ Connexion réussie", "Bienvenue!");
+			const result = await response.json();
 
-				// Met à jour le contexte utilisateur et navigation vers "Catalogue"
-				login({
-					nom: user.Nom,
-					prenom: user.Prenom,
-					email: user.Email,
-				});
+			if (result.success) {
+				console.log("✅ Connexion JWT réussie:", result.user);
 
+				// 1. Stocker le token
+				await AsyncStorage.setItem("authToken", result.token);
+				await AsyncStorage.setItem("user", JSON.stringify(result.user));
+
+				// 2. Mettre à jour le contexte utilisateur et connexion
+				login(result.user, result.token);
+
+				// 3. Redirection
+				Alert.alert("✅ Connexion réussie", "Bienvenue !");
 				navigation.navigate("Catalogue");
 			} else {
-				Alert.alert("❌ Erreur", "Email ou mot de passe incorrect.");
-				console.log("❌ Échec de l'authentification, Email ou mot de passe incorrect.");
+				Alert.alert("❌ Erreur", result.message);
+				console.log("❌ Échec de l'authentification:", result.message);
 			}
 		} catch (error) {
 			console.error("❌ Erreur lors de la vérification :", error);

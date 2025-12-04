@@ -1,72 +1,49 @@
-import React, { useEffect, useState } from "react";
-import { StatusBar, View, Platform, Text } from "react-native";
+import React, { useContext } from "react";
+import { StatusBar, View, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import TabNavigator from "./Navigation/TabNavigator";
-import { UserProvider } from "./Context/UserContext";
-import { InitDB } from "./Database/InitDB";
+import { UserProvider, UserContext } from "./Context/UserContext";
 import { FavorisProvider } from "./Context/FavorisContext";
 import { PanierProvider } from "./Context/PanierContext";
 import { ArticleProvider } from "./Context/ArticleContext";
 
-const App = () => {
-	const [dbInitialized, setDbInitialized] = useState(false);
-	const [dbError, setDbError] = useState(null);
+// Wrapper qui injecte user dans les contexts
+const ContextWrapper = ({ children }) => {
+	const { user, loading: userLoading } = useContext(UserContext);
 
-	useEffect(() => {
-		const initializeDatabase = async () => {
-			try {
-				console.log("🔄 Initialisation de la base de données...");
-				const success = await InitDB();
-				console.log("📊 Résultat de l'initialisation:", success);
-
-				if (success) {
-					setDbInitialized(true);
-				} else {
-					setDbError("❌ Échec de l'initialisation de la base de données");
-				}
-			} catch (error) {
-				setDbError(error.message);
-			}
-		};
-
-		initializeDatabase();
-	}, []);
+	// Si l'utilisateur est en cours de chargement, afficher un indicateur
+	if (userLoading) {
+		return (
+			<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+				<ActivityIndicator size="large" color="#1c5be4ff" />
+			</View>
+		);
+	}
 
 	return (
+		<ArticleProvider>
+			<PanierProvider user={user}>
+				<FavorisProvider user={user}>{children}</FavorisProvider>
+			</PanierProvider>
+		</ArticleProvider>
+	);
+};
+
+const App = () => {
+	return (
 		<UserProvider>
-			<ArticleProvider>
-				<FavorisProvider>
-					<PanierProvider>
-						<NavigationContainer>
-							{/* AFFICHE SOIT L'ERREUR, SOIT LE CHARGEMENT OU SOIT L’APP */}
-							{!dbInitialized ? (
-								<>
-									<StatusBar barStyle="light-content" backgroundColor="#1c5be4ff" />
-									<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-										{dbError ? (
-											<>
-												<Text style={{ color: "red", fontSize: 16 }}>❌ Erreur base de données</Text>
-												<Text style={{ color: "red" }}>{dbError}</Text>
-											</>
-										) : (
-											<Text>🔄 Initialisation de la base...</Text>
-										)}
-									</View>
-								</>
-							) : (
-								<View style={{ flex: 1 }}>
-									<StatusBar barStyle="light-content" backgroundColor="#1c5be4ff" translucent={false} />
-									<SafeAreaView style={{ flex: 0, backgroundColor: "#1c5be4ff" }} />
-									<SafeAreaView style={{ flex: 1 }} edges={["right", "bottom", "left"]}>
-										<TabNavigator />
-									</SafeAreaView>
-								</View>
-							)}
-						</NavigationContainer>
-					</PanierProvider>
-				</FavorisProvider>
-			</ArticleProvider>
+			<ContextWrapper>
+				<NavigationContainer>
+					<View style={{ flex: 1 }}>
+						<StatusBar barStyle="light-content" backgroundColor="#1c5be4ff" translucent={false} />
+						<SafeAreaView style={{ flex: 0, backgroundColor: "#1c5be4ff" }} />
+						<SafeAreaView style={{ flex: 1 }} edges={["right", "bottom", "left"]}>
+							<TabNavigator />
+						</SafeAreaView>
+					</View>
+				</NavigationContainer>
+			</ContextWrapper>
 		</UserProvider>
 	);
 };

@@ -4,9 +4,9 @@ import { View, StyleSheet, Text, TextInput, ScrollView, KeyboardAvoidingView, Pl
 import { ActivityIndicator } from "react-native"; 
 import styles from "../Styles/Styles";
 import { Alert } from "react-native";
-import { InitDB } from "../Database/InitDB";
-import { InsertUser } from "../Database/Task";
 import { UserContext } from "../Context/UserContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SERVER_URL } from "@env";
 
 const InscriptionFormScreen = () => {
 	const [formData, setFormData] = useState({ nom: "", prenom: "", email: "", tel: "", password: "", confirmPassword: "" });
@@ -41,18 +41,6 @@ const InscriptionFormScreen = () => {
 		if (nomInputRef.current) {
 			nomInputRef.current.focus();
 		}
-	}, []);
-
-	// Initialise la base de donnée
-	useEffect(() => {
-		const setupDB = async () => {
-			try {
-				await InitDB();
-			} catch (error) {
-				console.error("❌ Erreur lors de m'initialisation de la base :", error);
-			}
-		};
-		setupDB();
 	}, []);
 
 	// UseEffect qui surveille la validité du formulaire pour l'activation du bouton submit
@@ -98,7 +86,7 @@ const InscriptionFormScreen = () => {
 		}));
 
 		if (value.trim() === "") {
-			setErrorNom('⚠️ Le champ "Pseudo" ne peut pas etre vide');
+			setErrorNom('⚠️ Le champ "Nom" ne peut pas etre vide');
 		} else if (!nameRegex.test(value)) {
 			setErrorNom("⚠️ Le nom ne peut contenir que des lettres");
 		} else {
@@ -114,7 +102,7 @@ const InscriptionFormScreen = () => {
 		}));
 
 		if (value.trim() === "") {
-			setErrorPrenom('⚠️ Le champ "Pseudo" ne peut pas etre vide');
+			setErrorPrenom('⚠️ Le champ "Prenom" ne peut pas etre vide');
 		} else if (!nameRegex.test(value)) {
 			setErrorPrenom("⚠️ Le prenom ne peut contenir que des lettres");
 		} else {
@@ -283,28 +271,36 @@ const InscriptionFormScreen = () => {
 
 		// Si la validation côté client est passée, on vérifie en base de données
 		try {
-			console.log("✅ Validation côté client réussie, vérification en base de données...");
-
-			await InsertUser(formData.nom, formData.prenom, formData.email, formData.tel, formData.password);
-			Alert.alert("✅ Inscription réussie", `Bienvenue, ${formData.prenom} !`);
-
-			// Réinitialisation correcte du formulaire
-			setFormData({
-				nom: "",
-				prenom: "",
-				email: "",
-				tel: "",
-				password: "",
-				confirmPassword: "",
+			const response = await fetch(`${SERVER_URL}/auth/inscription`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					nom: formData.nom,
+					prenom: formData.prenom,
+					email: formData.email,
+					tel: formData.tel,
+					password: formData.password,
+					source: "mobile",
+				}),
 			});
 
-			// Met automatiquement à jour isLogin dans le TabNavigator et navigation vers "Catalogue"
-			login({
-				nom: formData.nom,
-				prenom: formData.prenom,
-				email: formData.email,
-			});
+		    const result = await response.json();
+
+		    if (result.success) {
+			    // Stocker le token
+			    await AsyncStorage.setItem("authToken", result.token);
+			    await AsyncStorage.setItem("user", JSON.stringify(result.user));
+
+			    // Connexion automatique après inscription
+			    login(result.user, result.token);
+
+			    Alert.alert("✅ Inscription réussie", `Bienvenue, ${formData.prenom} !`);
 			navigation.navigate("Catalogue");
+            } else {
+			Alert.alert("❌ Erreur", result.message);
+            }
 		} catch (error) {
         console.error("❌ Erreur lors de l'insertion :", error);
 
@@ -314,6 +310,7 @@ const InscriptionFormScreen = () => {
         }
 
         Alert.alert("❌ Erreur", messageErreur);
+        console.error("❌ Erreur", messageErreur);
         } finally {
 			// Fin du loading (même en cas d'erreur)
 			setLoading(false);
@@ -343,7 +340,7 @@ const InscriptionFormScreen = () => {
 						style={[styles.input, errorNom && styles.inputErreur]}
 						value={formData.nom}
 						onChangeText={(valeur) => handleNomChange("nom", valeur)}
-						placeholder="Entrez votre nom ici"
+						placeholder="Veuillez entrez votre nom ici"
 						returnKeyType="next"
 						onSubmitEditing={() => prenomInputRef.current && prenomInputRef.current.focus()}
 					/>
@@ -359,7 +356,7 @@ const InscriptionFormScreen = () => {
 						style={[styles.input, errorPrenom && styles.inputErreur]}
 						value={formData.prenom}
 						onChangeText={(valeur) => handlePrenomChange("prenom", valeur)}
-						placeholder="Entrez votre prenom ici"
+						placeholder="Veuillez entrez votre prenom ici"
 						returnKeyType="next"
 						onSubmitEditing={() => emailInputRef.current && emailInputRef.current.focus()}
 					/>
@@ -375,7 +372,7 @@ const InscriptionFormScreen = () => {
 						style={[styles.input, errorEmail && styles.inputErreur]}
 						value={formData.email}
 						onChangeText={(valeur) => handleEmailChange("email", valeur)}
-						placeholder="Entrez votre email ici"
+						placeholder="Veuillez entrez votre email ici"
 						returnKeyType="next"
 						onSubmitEditing={() => telInputRef.current && telInputRef.current.focus()}
 					/>
@@ -390,7 +387,7 @@ const InscriptionFormScreen = () => {
 						style={[styles.input, errorTel && styles.inputErreur]}
 						value={formData.tel}
 						onChangeText={(valeur) => handleTelChange("tel", valeur)}
-						placeholder="Entrez votre numéro de Téléphone ici"
+						placeholder="Veuillez entrez votre numéro de Téléphone ici"
 						returnKeyType="next"
 						onSubmitEditing={() => passwordInputRef.current && passwordInputRef.current.focus()}
 					/>
@@ -405,7 +402,7 @@ const InscriptionFormScreen = () => {
 						value={formData.password}
 						secureTextEntry={true}
 						onChangeText={(valeur) => handlePasswordChange("password", valeur)}
-						placeholder="Entrez votre mot de passe ici"
+						placeholder="Veuillez entrez votre mot de passe ici"
 						returnKeyType="next"
 						onSubmitEditing={() => confirmPasswordInputRef.current && confirmPasswordInputRef.current.focus()}
 					/>
@@ -415,11 +412,12 @@ const InscriptionFormScreen = () => {
 				<View>
 					<Text style={styles.label}>Confirmation du mot de passe:</Text>
 					<TextInput
+						ref={confirmPasswordInputRef}
 						style={[styles.input, errorConfirmPassword && styles.inputErreur]}
 						value={formData.confirmPassword}
 						secureTextEntry={true}
 						onChangeText={(valeur) => handleConfirmPasswordChange("confirmPassword", valeur)}
-						placeholder="Entrez votre confirmation de mot de passe ici"
+						placeholder="Veuillez entrez votre confirmation de mot de passe ici"
 						returnKeyType="done"
 						onSubmitEditing={handleSubmit}
 					/>

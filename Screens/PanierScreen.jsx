@@ -3,10 +3,12 @@ import { View, Text, FlatList, TouchableOpacity, Image, Alert } from "react-nati
 import styles from "../Styles/Styles";
 import { PanierContext } from "../Context/PanierContext";
 import { useCalculsPanier } from "../Hooks/useCalculsPanier";
+import { UserContext } from "../Context/UserContext";
 
 const PanierScreen = memo(() => {
 	// Accès au context
 	const { panier, ajouterAuPanier, supprimerDuPanier, viderLePanier } = useContext(PanierContext);
+    const { user } = useContext(UserContext);
 
 	// Accès au hook personnalisé
 	const { totalPanier } = useCalculsPanier();
